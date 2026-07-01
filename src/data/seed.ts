@@ -107,35 +107,6 @@ const TRAINING_GROUP_BY_LEVEL: Record<FitnessLevel, string> = {
   red: "קבוצה מותאמת (ג')",
 };
 
-function phoneFor(index: number): string {
-  const num = 2000000 + index * 137;
-  return `050-${String(num).slice(-7)}`;
-}
-
-const HEBREW_TO_LATIN: Record<string, string> = {
-  א: 'a', ב: 'b', ג: 'g', ד: 'd', ה: 'h', ו: 'v', ז: 'z', ח: 'ch', ט: 't',
-  י: 'y', כ: 'k', ך: 'k', ל: 'l', מ: 'm', ם: 'm', נ: 'n', ן: 'n', ס: 's',
-  ע: 'a', פ: 'p', ף: 'f', צ: 'tz', ץ: 'tz', ק: 'k', ר: 'r', ש: 'sh', ת: 't',
-};
-
-/** Transliterates a Hebrew name into Latin characters for use in email addresses (avoids mixed-direction bidi text). */
-function transliterate(name: string): string {
-  return name
-    .split('')
-    .map((char) => HEBREW_TO_LATIN[char] ?? char)
-    .join('');
-}
-
-function emailFor(name: string, index: number): string {
-  const slug = transliterate(name)
-    .replace(/["'׳״]/g, '')
-    .trim()
-    .split(/\s+/)
-    .join('.')
-    .toLowerCase();
-  return `cadet${String(index + 1).padStart(2, '0')}.${slug || 'officer'}@plaga-a.mil.il`;
-}
-
 function buildCadets(rng: () => number): Cadet[] {
   const cadets: Cadet[] = [];
   let globalIndex = 0;
@@ -158,10 +129,11 @@ function buildCadets(rng: () => number): Cadet[] {
         restrictions: hasRestriction ? 'הגבלה בברך - ללא ריצות מרחק' : '',
         painNotes: hasRestriction && rng() < 0.5 ? 'כאבי גב תחתון בעת מאמץ ממושך' : '',
         exemption: hasExemption,
-        phone: phoneFor(globalIndex),
-        email: emailFor(name, globalIndex),
+        // Placeholder contact details were never accurate - left blank until the fitness officer fills in real info.
+        phone: '',
+        email: '',
         emergencyContactName: `${name.split(' ')[0]} - איש קשר משפחתי`,
-        emergencyContactPhone: phoneFor(globalIndex + 500),
+        emergencyContactPhone: '',
         joinedAt: COURSE_START,
         photoUrl: undefined,
       });
@@ -226,6 +198,31 @@ function buildAttendance(cadets: Cadet[], rng: () => number, settings: Settings)
     }
   }
   return records;
+}
+
+/**
+ * Real attendance reported by the fitness officer: on 30/06/2026 all of
+ * team 2 attended the מד״ס session except Moshe Tuvina, who was on duty
+ * guarding the weapons - an excused (0-point) absence, not a penalty.
+ */
+function buildTeam2MadasAttendance(cadets: Cadet[], settings: Settings): AttendanceRecord[] {
+  const date = '2026-06-30';
+  const sessionName = 'מד״ס';
+  const rules = settings.scoringRules;
+  return cadets
+    .filter((c) => c.team === 'blue')
+    .map((cadet) => {
+      const onGuardDuty = cadet.fullName === 'משה טובינה';
+      return {
+        id: generateId('att'),
+        cadetId: cadet.id,
+        date,
+        sessionName,
+        status: onGuardDuty ? 'medical' : 'present',
+        points: onGuardDuty ? rules.attendanceMedical : rules.attendancePresent,
+        note: onGuardDuty ? 'אחראי על שמירת הנשקים' : undefined,
+      } satisfies AttendanceRecord;
+    });
 }
 
 interface BaseStats {
@@ -494,14 +491,17 @@ const DEFAULT_USERS: User[] = [
     name: 'אריאל בן עמי',
     role: 'קה"ג – מתרגל פלוגה א׳',
     email: 'benami0202@gmail.com',
-    phone: '050-2000137',
+    phone: '',
   },
 ];
 
 export function buildSeedData(): AppData {
   const rng = mulberry32(20260628);
   const cadets = buildCadets(rng);
-  const attendance = buildAttendance(cadets, rng, DEFAULT_SETTINGS);
+  const attendance = [
+    ...buildAttendance(cadets, rng, DEFAULT_SETTINGS),
+    ...buildTeam2MadasAttendance(cadets, DEFAULT_SETTINGS),
+  ];
   const fitnessTests = buildFitnessTests(cadets, rng);
   const trainingPlans = buildTrainingPlans();
   const weekendMissions = [...buildWeekendMissions(cadets, rng), buildTeam3PollMission(cadets)];
