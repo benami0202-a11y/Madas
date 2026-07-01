@@ -202,8 +202,8 @@ function buildAttendance(cadets: Cadet[], rng: () => number, settings: Settings)
 
 /**
  * Real attendance reported by the fitness officer: on 30/06/2026 all of
- * team 2 attended the מד״ס session except Moshe Tuvina, who was on duty
- * guarding the weapons - an excused (0-point) absence, not a penalty.
+ * team 2 attended the מד״ס session except Moshe Tuvina, who was on weapons
+ * guard duty ("מאזין על הנשק") - an excused partial-credit absence.
  */
 function buildTeam2MadasAttendance(cadets: Cadet[], settings: Settings): AttendanceRecord[] {
   const date = '2026-06-30';
@@ -218,20 +218,33 @@ function buildTeam2MadasAttendance(cadets: Cadet[], settings: Settings): Attenda
         cadetId: cadet.id,
         date,
         sessionName,
-        status: onGuardDuty ? 'medical' : 'present',
-        points: onGuardDuty ? rules.attendanceMedical : rules.attendancePresent,
-        note: onGuardDuty ? 'אחראי על שמירת הנשקים' : undefined,
+        status: onGuardDuty ? 'listener' : 'present',
+        points: onGuardDuty ? rules.attendanceListener : rules.attendancePresent,
+        note: onGuardDuty ? 'מאזין על הנשק' : undefined,
       } satisfies AttendanceRecord;
     });
 }
 
 /**
- * Real attendance: on 29/06/2026 the whole company did a 5.5km tag march
- * with vests and stretchers, and everyone attended.
+ * Real attendance: on 28/06/2026 the whole company did a base orientation
+ * session, and on 29/06/2026 a 5.5km tag march (walk) with vests and
+ * stretchers - everyone attended both.
  */
+function buildIntroDayAttendance(cadets: Cadet[], settings: Settings): AttendanceRecord[] {
+  const points = settings.scoringRules.attendancePresent;
+  return cadets.map((cadet) => ({
+    id: generateId('att'),
+    cadetId: cadet.id,
+    date: '2026-06-28',
+    sessionName: 'אימון הכרות עם הבה"ד',
+    status: 'present',
+    points,
+  }));
+}
+
 function buildTagMarchAttendance(cadets: Cadet[], settings: Settings): AttendanceRecord[] {
   const date = '2026-06-29';
-  const sessionName = 'מסע תגיות - 5.5 ק"מ עם ווסטים ואלונקות';
+  const sessionName = 'מסע תגיות - הליכה 5.5 ק"מ עם ווסטים ואלונקות';
   const points = settings.scoringRules.attendancePresent;
   return cadets.map((cadet) => ({
     id: generateId('att'),
@@ -241,6 +254,71 @@ function buildTagMarchAttendance(cadets: Cadet[], settings: Settings): Attendanc
     status: 'present',
     points,
   }));
+}
+
+/**
+ * Real attendance: on 30/06/2026 the whole company also had a running
+ * session. Everyone attended except Natanel Shpigelman (unexcused), and
+ * Moshe Tuvina + Eli Gross who were both on weapons guard duty.
+ */
+function buildRunningSessionAttendance(cadets: Cadet[], settings: Settings): AttendanceRecord[] {
+  const date = '2026-06-30';
+  const sessionName = 'אימון ריצה';
+  const rules = settings.scoringRules;
+  const guardDuty = ['משה טובינה', 'אלי גרוס'];
+  const unexcusedAbsent = ['נתנאל שפיגלמן'];
+  return cadets.map((cadet) => {
+    if (guardDuty.includes(cadet.fullName)) {
+      return {
+        id: generateId('att'),
+        cadetId: cadet.id,
+        date,
+        sessionName,
+        status: 'listener',
+        points: rules.attendanceListener,
+        note: 'מאזין על הנשק',
+      } satisfies AttendanceRecord;
+    }
+    if (unexcusedAbsent.includes(cadet.fullName)) {
+      return {
+        id: generateId('att'),
+        cadetId: cadet.id,
+        date,
+        sessionName,
+        status: 'absent',
+        points: rules.attendanceAbsent,
+      } satisfies AttendanceRecord;
+    }
+    return {
+      id: generateId('att'),
+      cadetId: cadet.id,
+      date,
+      sessionName,
+      status: 'present',
+      points: rules.attendancePresent,
+    } satisfies AttendanceRecord;
+  });
+}
+
+/**
+ * Real daily strength routine (push-ups, pull-ups, static plank per the
+ * fitness officer's progressive table) - everyone did it every day starting
+ * 29/06/2026.
+ */
+function buildDailyStrengthAttendance(cadets: Cadet[], settings: Settings): AttendanceRecord[] {
+  const dates = ['2026-06-29', '2026-06-30', '2026-07-01'];
+  const sessionName = 'כושר יומי - שכיבות סמיכה, מתח ובטן סטטית (לפי טבלה עולה)';
+  const points = settings.scoringRules.attendancePresent;
+  return dates.flatMap((date) =>
+    cadets.map((cadet) => ({
+      id: generateId('att'),
+      cadetId: cadet.id,
+      date,
+      sessionName,
+      status: 'present',
+      points,
+    })),
+  );
 }
 
 interface BaseStats {
@@ -379,24 +457,6 @@ function buildTeam3PollMission(cadets: Cadet[]): WeekendMission {
     title: 'סקר צוותי: אימונים קלים עצמאיים (צוות 3)',
     description: 'סקר שהעביר איתי צפאני בקבוצת צוות 3 - מי ביצע אימונים קלים עצמאיים בסוף השבוע.',
     completions,
-  };
-}
-
-/**
- * Real progressive strength program given to every team by the fitness
- * officer: daily push-ups, pull-ups and static plank targets that climb from
- * 28/06 through 01/08. Everyone completed the first week (28/06-01/07).
- */
-function buildStrengthProgramMission(cadets: Cadet[]): WeekendMission {
-  const completionDate = '2026-07-01';
-  return {
-    id: generateId('mission'),
-    weekNumber: 1,
-    title: 'תוכנית כוח נוסף - שכיבות סמיכה, מתח ובטן סטטית (עולה יומית)',
-    description:
-      'תוכנית יומית עולה שניתנה לכל הצוותים: החל מ-3 שכיבות סמיכה, עליית מתח אחת ו-10 שניות בטן סטטית ביום הראשון (28.6), ' +
-      'עולה בהדרגה עד 30 שכיבות סמיכה, 6 עליות מתח ודקה בטן סטטית בסיום (1.8).',
-    completions: cadets.map((cadet) => ({ cadetId: cadet.id, completed: true, completionDate })),
   };
 }
 
@@ -549,15 +609,14 @@ export function buildSeedData(): AppData {
   const attendance = [
     ...buildAttendance(cadets, rng, DEFAULT_SETTINGS),
     ...buildTeam2MadasAttendance(cadets, DEFAULT_SETTINGS),
+    ...buildIntroDayAttendance(cadets, DEFAULT_SETTINGS),
     ...buildTagMarchAttendance(cadets, DEFAULT_SETTINGS),
+    ...buildRunningSessionAttendance(cadets, DEFAULT_SETTINGS),
+    ...buildDailyStrengthAttendance(cadets, DEFAULT_SETTINGS),
   ];
   const fitnessTests = buildFitnessTests(cadets, rng);
   const trainingPlans = buildTrainingPlans();
-  const weekendMissions = [
-    ...buildWeekendMissions(cadets, rng),
-    buildTeam3PollMission(cadets),
-    buildStrengthProgramMission(cadets),
-  ];
+  const weekendMissions = [...buildWeekendMissions(cadets, rng), buildTeam3PollMission(cadets)];
   const scores = buildScores(cadets, attendance, weekendMissions, fitnessTests, rng, DEFAULT_SETTINGS);
   const notes = buildNotes(cadets, rng);
 

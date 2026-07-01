@@ -1,17 +1,19 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowRight, Phone, Mail, ShieldAlert, MessageSquarePlus, Trash2 } from 'lucide-react';
+import { ArrowRight, Phone, Mail, ShieldAlert, MessageSquarePlus, Trash2, Pencil } from 'lucide-react';
 import { useCadet } from '@/hooks/useCadets';
 import { useNotes } from '@/hooks/useNotes';
 import { Avatar } from '@/components/ui/Avatar';
 import { TeamBadge } from '@/components/cadets/TeamBadge';
 import { FitnessLevelBadge } from '@/components/cadets/FitnessLevelBadge';
 import { FitnessLevelSelector } from '@/components/cadets/FitnessLevelSelector';
+import { CadetForm } from '@/components/cadets/CadetForm';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/ui/Modal';
 import { SimpleLineChart } from '@/components/charts/SimpleLineChart';
 import { FitnessTestComparison } from '@/components/fitnessTests/FitnessTestComparison';
 import {
@@ -34,6 +36,7 @@ export default function CadetProfile() {
   const { cadet, updateCadet } = useCadet(id);
   const data = useAppData();
   const [tab, setTab] = useState<(typeof TABS)[number]>('סקירה');
+  const [editingDetails, setEditingDetails] = useState(false);
   const { notes, addNote, deleteNote } = useNotes(id);
   const [noteText, setNoteText] = useState('');
   const [noteType, setNoteType] = useState<NoteType>('coach');
@@ -136,17 +139,25 @@ export default function CadetProfile() {
           <Card>
             <CardHeader>
               <CardTitle>פרטים אישיים</CardTitle>
+              <button
+                onClick={() => setEditingDetails(true)}
+                className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-500/10"
+              >
+                <Pencil size={14} />
+                עריכה
+              </button>
             </CardHeader>
             <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+              <Info label="שם מלא" value={cadet.fullName} />
               <Info label="פרופיל רפואי" value={cadet.medicalProfile} />
               <Info label="הגבלות" value={cadet.restrictions || 'אין'} />
               <Info label="הערות כאב" value={cadet.painNotes || 'אין'} />
               <Info label="קבוצת אימון" value={cadet.trainingGroup} />
-              <Info label="טלפון" value={cadet.phone} icon={<Phone size={14} />} ltr />
-              <Info label="אימייל" value={cadet.email} icon={<Mail size={14} />} ltr />
+              <Info label="טלפון" value={cadet.phone || 'לא הוזן'} icon={<Phone size={14} />} ltr />
+              <Info label="אימייל" value={cadet.email || 'לא הוזן'} icon={<Mail size={14} />} ltr />
               <Info
                 label="איש קשר לחירום"
-                value={`${cadet.emergencyContactName} · ${cadet.emergencyContactPhone}`}
+                value={`${cadet.emergencyContactName} · ${cadet.emergencyContactPhone || 'לא הוזן'}`}
                 icon={<ShieldAlert size={14} />}
               />
             </dl>
@@ -280,6 +291,17 @@ export default function CadetProfile() {
           </Card>
         </div>
       )}
+
+      <Modal open={editingDetails} onClose={() => setEditingDetails(false)} title="עריכת פרטי חניך">
+        <CadetForm
+          initial={cadet}
+          onSubmit={(values) => {
+            updateCadet(cadet.id, values);
+            setEditingDetails(false);
+          }}
+          onCancel={() => setEditingDetails(false)}
+        />
+      </Modal>
     </div>
   );
 }

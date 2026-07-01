@@ -8,7 +8,7 @@ const CONFIG: Record<AttendanceStatus, { label: string; active: string; idle: st
     idle: 'border-emerald-200 text-emerald-700 dark:border-emerald-900 dark:text-emerald-400',
   },
   listener: {
-    label: 'שומע',
+    label: 'מאזין',
     active: 'bg-blue-500 text-white border-blue-500',
     idle: 'border-blue-200 text-blue-700 dark:border-blue-900 dark:text-blue-400',
   },

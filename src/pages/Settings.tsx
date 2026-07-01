@@ -11,7 +11,7 @@ const inputClass =
 
 const SCORING_FIELDS: { key: keyof ScoringRules; label: string }[] = [
   { key: 'attendancePresent', label: 'נוכחות מלאה' },
-  { key: 'attendanceListener', label: 'שומע' },
+  { key: 'attendanceListener', label: 'מאזין' },
   { key: 'attendanceMedical', label: 'פטור רפואי' },
   { key: 'attendanceAbsent', label: 'היעדרות' },
   { key: 'weekendMission', label: 'משימת סופ"ש' },

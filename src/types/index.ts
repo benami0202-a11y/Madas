@@ -174,7 +174,7 @@ export const FITNESS_LEVEL_COLORS: Record<FitnessLevel, { bg: string; text: stri
 
 export const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus, string> = {
   present: 'נוכח',
-  listener: 'שומע',
+  listener: 'מאזין',
   medical: 'פטור רפואי',
   absent: 'נעדר',
 };

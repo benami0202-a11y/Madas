@@ -44,7 +44,7 @@ export default function Reports() {
           צוות: TEAM_LABELS[c.team],
           'סה"כ אימונים': records.length,
           נוכח: records.filter((r) => r.status === 'present').length,
-          שומע: records.filter((r) => r.status === 'listener').length,
+          מאזין: records.filter((r) => r.status === 'listener').length,
           פטור: records.filter((r) => r.status === 'medical').length,
           נעדר: records.filter((r) => r.status === 'absent').length,
           'אחוז נוכחות': `${cadetAttendancePercent(data, c.id)}%`,
