@@ -1,0 +1,491 @@
+import type {
+  AppData,
+  AttendanceRecord,
+  Cadet,
+  FitnessLevel,
+  FitnessTestResult,
+  Note,
+  ScoreEntry,
+  Settings,
+  Team,
+  TestPeriod,
+  TrainingPlanWeek,
+  TrainingType,
+  User,
+  WeekendMission,
+} from '@/types';
+import { addDays, generateId, mulberry32, randInt, round, weightedPick } from '@/lib/utils';
+
+export const COURSE_START = '2026-06-28';
+export const COURSE_END = '2026-08-05';
+
+export const DEFAULT_SETTINGS: Settings = {
+  appName: 'מערך הכושר הפלוגתי',
+  subtitle: 'מערכת ניהול הכושר של קורס הקצינים',
+  courseStart: COURSE_START,
+  courseEnd: COURSE_END,
+  adminName: 'אריאל בן עמי',
+  adminRole: 'קה"ג – מתרגל פלוגה א׳',
+  scoringRules: {
+    attendancePresent: 5,
+    attendanceListener: 2,
+    attendanceMedical: 0,
+    attendanceAbsent: -5,
+    weekendMission: 5,
+    improvement: 10,
+    helpingFriends: 5,
+    leadership: 10,
+    excellentPerformance: 15,
+  },
+  trainingTypeLabels: {
+    running: 'ריצה',
+    intervals: 'אינטרוולים',
+    tempo: 'טמפו',
+    strength: 'כוח',
+    mobility: 'מוביליטי',
+    stretching: 'מתיחות',
+  },
+  fitnessLevelLabels: {
+    green: 'ירוק (A)',
+    yellow: 'צהוב (B)',
+    red: 'אדום (C)',
+  },
+};
+
+const TEAM_ROSTERS: Record<Team, string[]> = {
+  green: [
+    'יאיר סויסה',
+    'משה מלכה',
+    'ניר ויטור',
+    'שי יאראק',
+    'אתי צור',
+    'אלעד זכריה',
+    'אליעזר ברויאר',
+    'איתן אורנשטיין',
+    'אוהד קונוביץ',
+    'נתנאל שפיגלמן',
+    'ברוך קרסיק',
+    'יורם ישראל ביטון',
+    'ארי גוטהלף',
+    'שלום ערד',
+  ],
+  blue: [
+    'אריאל בן עמי',
+    'יחיאל זוהר',
+    'נתנאל שלזינגר',
+    'גוטליב',
+    'הורביץ',
+    'עמר',
+    'קרליבך',
+    'הראל',
+    'אלמוג אבי',
+    'אבי ברובסקי',
+    'משה טובינה',
+    'שלמה קינן',
+    'אורן מועלם',
+  ],
+  orange: [
+    'אשר סיני',
+    'יחיאל שיינפלד',
+    'יאיר בן אליעזר',
+    'איתי צפאני',
+    'יוסי אלבז',
+    'יצחק שגיא',
+    'מוטי ברלב',
+    'יצחק ליקסנבורג',
+    'אלי גרוס',
+    'צבי מנדלסון',
+    'דניאל עידן',
+    'חיעד',
+    'יצחק סבח',
+  ],
+};
+
+const TRAINING_GROUP_BY_LEVEL: Record<FitnessLevel, string> = {
+  green: "קבוצה מהירה (א')",
+  yellow: "קבוצה בינונית (ב')",
+  red: "קבוצה מותאמת (ג')",
+};
+
+function phoneFor(index: number): string {
+  const num = 2000000 + index * 137;
+  return `050-${String(num).slice(-7)}`;
+}
+
+const HEBREW_TO_LATIN: Record<string, string> = {
+  א: 'a', ב: 'b', ג: 'g', ד: 'd', ה: 'h', ו: 'v', ז: 'z', ח: 'ch', ט: 't',
+  י: 'y', כ: 'k', ך: 'k', ל: 'l', מ: 'm', ם: 'm', נ: 'n', ן: 'n', ס: 's',
+  ע: 'a', פ: 'p', ף: 'f', צ: 'tz', ץ: 'tz', ק: 'k', ר: 'r', ש: 'sh', ת: 't',
+};
+
+/** Transliterates a Hebrew name into Latin characters for use in email addresses (avoids mixed-direction bidi text). */
+function transliterate(name: string): string {
+  return name
+    .split('')
+    .map((char) => HEBREW_TO_LATIN[char] ?? char)
+    .join('');
+}
+
+function emailFor(name: string, index: number): string {
+  const slug = transliterate(name)
+    .replace(/["'׳״]/g, '')
+    .trim()
+    .split(/\s+/)
+    .join('.')
+    .toLowerCase();
+  return `cadet${String(index + 1).padStart(2, '0')}.${slug || 'officer'}@plaga-a.mil.il`;
+}
+
+function buildCadets(rng: () => number): Cadet[] {
+  const cadets: Cadet[] = [];
+  let globalIndex = 0;
+  (Object.keys(TEAM_ROSTERS) as Team[]).forEach((team) => {
+    TEAM_ROSTERS[team].forEach((name) => {
+      const fitnessLevel = weightedPick<FitnessLevel>(rng, [
+        ['green', 0.5],
+        ['yellow', 0.33],
+        ['red', 0.17],
+      ]);
+      const hasRestriction = rng() < 0.15;
+      const hasExemption = rng() < 0.05 && hasRestriction;
+      cadets.push({
+        id: `cadet-${globalIndex + 1}`,
+        fullName: name,
+        team,
+        fitnessLevel,
+        trainingGroup: TRAINING_GROUP_BY_LEVEL[fitnessLevel],
+        medicalProfile: hasExemption ? '72' : hasRestriction ? '82' : '97',
+        restrictions: hasRestriction ? 'הגבלה בברך - ללא ריצות מרחק' : '',
+        painNotes: hasRestriction && rng() < 0.5 ? 'כאבי גב תחתון בעת מאמץ ממושך' : '',
+        exemption: hasExemption,
+        phone: phoneFor(globalIndex),
+        email: emailFor(name, globalIndex),
+        emergencyContactName: `${name.split(' ')[0]} - איש קשר משפחתי`,
+        emergencyContactPhone: phoneFor(globalIndex + 500),
+        joinedAt: COURSE_START,
+        photoUrl: undefined,
+      });
+      globalIndex += 1;
+    });
+  });
+  return cadets;
+}
+
+function weekDates(weekNumber: number): { start: string; end: string } {
+  const start = addDays(COURSE_START, (weekNumber - 1) * 7);
+  const end = addDays(COURSE_START, Math.min(weekNumber * 7 - 1, 37));
+  return { start, end };
+}
+
+const TOTAL_WEEKS = 6;
+
+const SESSION_TEMPLATES = [
+  { offset: 0, name: 'אימון בוקר - ריצה' },
+  { offset: 2, name: 'אימון כוח וסיבולת' },
+  { offset: 4, name: 'אימון מיומנויות קרביות' },
+];
+
+function buildAttendance(cadets: Cadet[], rng: () => number, settings: Settings): AttendanceRecord[] {
+  const records: AttendanceRecord[] = [];
+  const rules = settings.scoringRules;
+  for (let week = 1; week <= TOTAL_WEEKS; week++) {
+    const { start } = weekDates(week);
+    for (const session of SESSION_TEMPLATES) {
+      const date = addDays(start, session.offset);
+      if (date > COURSE_END) continue;
+      for (const cadet of cadets) {
+        const status = weightedPick<AttendanceRecord['status']>(rng, [
+          ['present', 0.74],
+          ['listener', 0.1],
+          ['medical', cadet.exemption ? 0.3 : 0.06],
+          ['absent', 0.1],
+        ]);
+        const pointsMap: Record<AttendanceRecord['status'], number> = {
+          present: rules.attendancePresent,
+          listener: rules.attendanceListener,
+          medical: rules.attendanceMedical,
+          absent: rules.attendanceAbsent,
+        };
+        records.push({
+          id: generateId('att'),
+          cadetId: cadet.id,
+          date,
+          sessionName: `שבוע ${week} - ${session.name}`,
+          status,
+          points: pointsMap[status],
+        });
+      }
+    }
+  }
+  return records;
+}
+
+interface BaseStats {
+  run3km: number;
+  pushups: number;
+  pullups: number;
+  plank: number;
+}
+
+const LEVEL_BASE: Record<FitnessLevel, BaseStats> = {
+  green: { run3km: 13 * 60, pushups: 45, pullups: 12, plank: 150 },
+  yellow: { run3km: 15 * 60 + 30, pushups: 32, pullups: 7, plank: 105 },
+  red: { run3km: 18 * 60, pushups: 20, pullups: 3, plank: 70 },
+};
+
+function buildFitnessTests(cadets: Cadet[], rng: () => number): FitnessTestResult[] {
+  const results: FitnessTestResult[] = [];
+  const periods: { period: TestPeriod; date: string; improvementFactor: number }[] = [
+    { period: 'opening', date: addDays(COURSE_START, 1), improvementFactor: 0 },
+    { period: 'middle', date: addDays(COURSE_START, 18), improvementFactor: 0.5 },
+    { period: 'final', date: addDays(COURSE_START, 36), improvementFactor: 1 },
+  ];
+
+  for (const cadet of cadets) {
+    const base = LEVEL_BASE[cadet.fitnessLevel];
+    for (const { period, date, improvementFactor } of periods) {
+      const noise = () => (rng() - 0.5) * 2;
+      const runImprovement = 45 * improvementFactor + noise() * 8;
+      const repImprovement = 6 * improvementFactor + noise();
+      results.push({
+        id: generateId('ftest'),
+        cadetId: cadet.id,
+        period,
+        date,
+        run3kmSeconds: Math.max(600, Math.round(base.run3km - runImprovement)),
+        pushups: Math.max(5, Math.round(base.pushups + repImprovement)),
+        pullups: Math.max(0, Math.round(base.pullups + repImprovement / 2)),
+        plankSeconds: Math.max(30, Math.round(base.plank + repImprovement * 4)),
+        burpees: Math.max(5, Math.round(15 + repImprovement)),
+      });
+    }
+  }
+  return results;
+}
+
+const WEEK_PLAN_TEMPLATES: { objectives: string; trainingTypes: TrainingType[]; notes: string }[] = [
+  {
+    objectives: 'בניית בסיס אירובי וחיזוק ליבה',
+    trainingTypes: ['running', 'strength', 'mobility'],
+    notes: 'התמקדות בטכניקת ריצה ובחימום מפרקים לפני כל אימון.',
+  },
+  {
+    objectives: 'העלאת סף אנאירובי',
+    trainingTypes: ['intervals', 'strength', 'stretching'],
+    notes: 'אינטרוולים 400 מ׳ עם דגש על זמני מנוחה מבוקרים.',
+  },
+  {
+    objectives: 'שיפור מהירות וקצב ריצה תחרותי',
+    trainingTypes: ['tempo', 'running', 'mobility'],
+    notes: 'ריצת טמפו בקצב מבחן היעד + עבודת רגליים.',
+  },
+  {
+    objectives: 'חיזוק שרירי ליבה ומניעת פציעות',
+    trainingTypes: ['strength', 'mobility', 'stretching'],
+    notes: 'שילוב תרגילי TRX וקור, דגש על מתיחות בסיום.',
+  },
+  {
+    objectives: 'הכנה למבחן אמצע - שילוב עומסים',
+    trainingTypes: ['intervals', 'tempo', 'strength'],
+    notes: 'שבוע עומס גבוה, מעקב אחר עייפות ופציעות.',
+  },
+  {
+    objectives: 'חידוד אחרון לקראת מבחן סיום',
+    trainingTypes: ['tempo', 'running', 'stretching'],
+    notes: 'הפחתת עומס (Taper) ושמירה על חדות לקראת המבחן המסכם.',
+  },
+];
+
+function buildTrainingPlans(): TrainingPlanWeek[] {
+  return Array.from({ length: TOTAL_WEEKS }, (_, i) => {
+    const week = i + 1;
+    const { start, end } = weekDates(week);
+    const template = WEEK_PLAN_TEMPLATES[i % WEEK_PLAN_TEMPLATES.length];
+    return {
+      id: generateId('plan'),
+      weekNumber: week,
+      startDate: start,
+      endDate: end,
+      objectives: template.objectives,
+      trainingTypes: template.trainingTypes,
+      notes: template.notes,
+    };
+  });
+}
+
+const MISSION_TEMPLATES = [
+  { title: 'ריצת סופ"ש - 5 ק"מ עצמאית', description: 'ביצוע ריצה עצמאית של 5 ק"מ בקצב נוח, תיעוד זמן וקצב לב.' },
+  { title: 'אימון כוח ביתי', description: '3 סטים של שכיבות סמיכה, בטן ושכיבות שוקיים - תיעוד חזרות.' },
+  { title: 'מתיחות וניידות יומית', description: '15 דקות מתיחות דינמיות בכל יום, דגש על ירכיים וכתפיים.' },
+  { title: 'אתגר עליות מתח', description: 'ביצוע 3 סטים עד כשל של עליות מתח, מנוחה של 90 שניות בין הסטים.' },
+  { title: 'הליכה/ריצה עם ציוד', description: 'הליכת קילומטראז\' עם תיק קרבי 10 ק"ג לפי הנחיית המדריך.' },
+  { title: 'סיכום שבועי אישי', description: 'מילוי יומן אימונים אישי וסימון תחושות ותובנות מהשבוע.' },
+];
+
+function buildWeekendMissions(cadets: Cadet[], rng: () => number): WeekendMission[] {
+  return Array.from({ length: TOTAL_WEEKS - 1 }, (_, i) => {
+    const week = i + 1;
+    const template = MISSION_TEMPLATES[i % MISSION_TEMPLATES.length];
+    const { end } = weekDates(week);
+    return {
+      id: generateId('mission'),
+      weekNumber: week,
+      title: `שבוע ${week}: ${template.title}`,
+      description: template.description,
+      videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      completions: cadets.map((cadet) => {
+        const completed = rng() < 0.72;
+        return {
+          cadetId: cadet.id,
+          completed,
+          completionDate: completed ? addDays(end, randInt(rng, 0, 2)) : undefined,
+        };
+      }),
+    };
+  });
+}
+
+function buildScores(
+  cadets: Cadet[],
+  attendance: AttendanceRecord[],
+  missions: WeekendMission[],
+  fitnessTests: FitnessTestResult[],
+  rng: () => number,
+  settings: Settings,
+): ScoreEntry[] {
+  const scores: ScoreEntry[] = [];
+  const rules = settings.scoringRules;
+
+  for (const record of attendance) {
+    if (record.points === 0) continue;
+    scores.push({
+      id: generateId('score'),
+      cadetId: record.cadetId,
+      type: record.status === 'absent' ? 'absence' : 'attendance',
+      points: record.points,
+      date: record.date,
+      note: record.sessionName,
+      relatedId: record.id,
+    });
+  }
+
+  for (const mission of missions) {
+    for (const completion of mission.completions) {
+      if (!completion.completed) continue;
+      scores.push({
+        id: generateId('score'),
+        cadetId: completion.cadetId,
+        type: 'weekend_mission',
+        points: rules.weekendMission,
+        date: completion.completionDate ?? mission.weekNumber.toString(),
+        note: mission.title,
+        relatedId: `${mission.id}__${completion.cadetId}`,
+      });
+    }
+  }
+
+  for (const cadet of cadets) {
+    const opening = fitnessTests.find((t) => t.cadetId === cadet.id && t.period === 'opening');
+    const final = fitnessTests.find((t) => t.cadetId === cadet.id && t.period === 'final');
+    if (opening && final && final.run3kmSeconds < opening.run3kmSeconds - 10) {
+      scores.push({
+        id: generateId('score'),
+        cadetId: cadet.id,
+        type: 'improvement',
+        points: rules.improvement,
+        date: final.date,
+        note: 'שיפור ניכר בזמן ריצת 3 ק"מ בין מבחן פתיחה לסיום',
+      });
+    }
+  }
+
+  const bonusTypes: { type: ScoreEntry['type']; points: number; note: string }[] = [
+    { type: 'helping_friends', points: rules.helpingFriends, note: 'עזרה יזומה לחבר מתקשה באימון' },
+    { type: 'leadership', points: rules.leadership, note: 'הפגנת מנהיגות בהובלת קבוצה' },
+    { type: 'excellent_performance', points: rules.excellentPerformance, note: 'ביצוע מצטיין באימון שבועי' },
+  ];
+  for (const cadet of cadets) {
+    const bonusCount = randInt(rng, 0, 2);
+    for (let i = 0; i < bonusCount; i++) {
+      const bonus = bonusTypes[randInt(rng, 0, bonusTypes.length - 1)];
+      scores.push({
+        id: generateId('score'),
+        cadetId: cadet.id,
+        type: bonus.type,
+        points: bonus.points,
+        date: addDays(COURSE_START, randInt(rng, 3, 34)),
+        note: bonus.note,
+      });
+    }
+  }
+
+  return scores;
+}
+
+function buildNotes(cadets: Cadet[], rng: () => number): Note[] {
+  const notes: Note[] = [];
+  const coachNotes = [
+    'הראה מוטיבציה גבוהה השבוע, ממשיך לשפר טכניקת ריצה.',
+    'יש לעקוב אחר עומס האימונים בשל תלונות עייפות קלות.',
+    'מוביל טוב בקבוצה, עוזר לחיילים מתקשים.',
+    'שיפור ניכר בזמן ריצת 3 ק"מ, ממליץ לשקול קידום רמת כושר.',
+  ];
+  for (const cadet of cadets) {
+    if (rng() < 0.5) {
+      notes.push({
+        id: generateId('note'),
+        cadetId: cadet.id,
+        type: 'coach',
+        text: coachNotes[randInt(rng, 0, coachNotes.length - 1)],
+        date: addDays(COURSE_START, randInt(rng, 2, 34)),
+        author: DEFAULT_SETTINGS.adminName,
+      });
+    }
+    if (cadet.restrictions) {
+      notes.push({
+        id: generateId('note'),
+        cadetId: cadet.id,
+        type: 'medical',
+        text: cadet.restrictions,
+        date: COURSE_START,
+        author: DEFAULT_SETTINGS.adminName,
+      });
+    }
+  }
+  return notes;
+}
+
+const DEFAULT_USERS: User[] = [
+  {
+    id: 'user-admin',
+    name: 'אריאל בן עמי',
+    role: 'קה"ג – מתרגל פלוגה א׳',
+    email: 'benami0202@gmail.com',
+    phone: '050-2000137',
+  },
+];
+
+export function buildSeedData(): AppData {
+  const rng = mulberry32(20260628);
+  const cadets = buildCadets(rng);
+  const attendance = buildAttendance(cadets, rng, DEFAULT_SETTINGS);
+  const fitnessTests = buildFitnessTests(cadets, rng);
+  const trainingPlans = buildTrainingPlans();
+  const weekendMissions = buildWeekendMissions(cadets, rng);
+  const scores = buildScores(cadets, attendance, weekendMissions, fitnessTests, rng, DEFAULT_SETTINGS);
+  const notes = buildNotes(cadets, rng);
+
+  return {
+    cadets,
+    attendance,
+    fitnessTests,
+    trainingPlans,
+    weekendMissions,
+    scores,
+    notes,
+    users: DEFAULT_USERS,
+    settings: DEFAULT_SETTINGS,
+  };
+}
+
+export const round1 = (v: number) => round(v, 1);
