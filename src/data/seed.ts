@@ -382,6 +382,24 @@ function buildTeam3PollMission(cadets: Cadet[]): WeekendMission {
   };
 }
 
+/**
+ * Real progressive strength program given to every team by the fitness
+ * officer: daily push-ups, pull-ups and static plank targets that climb from
+ * 28/06 through 01/08. Everyone completed the first week (28/06-01/07).
+ */
+function buildStrengthProgramMission(cadets: Cadet[]): WeekendMission {
+  const completionDate = '2026-07-01';
+  return {
+    id: generateId('mission'),
+    weekNumber: 1,
+    title: 'תוכנית כוח נוסף - שכיבות סמיכה, מתח ובטן סטטית (עולה יומית)',
+    description:
+      'תוכנית יומית עולה שניתנה לכל הצוותים: החל מ-3 שכיבות סמיכה, עליית מתח אחת ו-10 שניות בטן סטטית ביום הראשון (28.6), ' +
+      'עולה בהדרגה עד 30 שכיבות סמיכה, 6 עליות מתח ודקה בטן סטטית בסיום (1.8).',
+    completions: cadets.map((cadet) => ({ cadetId: cadet.id, completed: true, completionDate })),
+  };
+}
+
 function buildWeekendMissions(cadets: Cadet[], rng: () => number): WeekendMission[] {
   return Array.from({ length: TOTAL_WEEKS - 1 }, (_, i) => {
     const week = i + 1;
@@ -535,7 +553,11 @@ export function buildSeedData(): AppData {
   ];
   const fitnessTests = buildFitnessTests(cadets, rng);
   const trainingPlans = buildTrainingPlans();
-  const weekendMissions = [...buildWeekendMissions(cadets, rng), buildTeam3PollMission(cadets)];
+  const weekendMissions = [
+    ...buildWeekendMissions(cadets, rng),
+    buildTeam3PollMission(cadets),
+    buildStrengthProgramMission(cadets),
+  ];
   const scores = buildScores(cadets, attendance, weekendMissions, fitnessTests, rng, DEFAULT_SETTINGS);
   const notes = buildNotes(cadets, rng);
 
