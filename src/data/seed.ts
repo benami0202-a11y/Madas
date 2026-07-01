@@ -168,6 +168,14 @@ function buildCadets(rng: () => number): Cadet[] {
       globalIndex += 1;
     });
   });
+
+  // Manual corrections from real course feedback (reported by the company fitness officer).
+  const itai = cadets.find((c) => c.fullName === 'איתי צפאני');
+  if (itai) {
+    itai.fitnessLevel = 'green';
+    itai.trainingGroup = TRAINING_GROUP_BY_LEVEL.green;
+  }
+
   return cadets;
 }
 
@@ -322,6 +330,31 @@ const MISSION_TEMPLATES = [
   { title: 'סיכום שבועי אישי', description: 'מילוי יומן אימונים אישי וסימון תחושות ותובנות מהשבוע.' },
 ];
 
+/**
+ * Real poll Itai Tzefani (team 3) ran on 29/06/2026 asking teammates whether
+ * they did light independent workouts that weekend. Recorded as an actual
+ * weekend mission instead of randomly generated demo data.
+ */
+function buildTeam3PollMission(cadets: Cadet[]): WeekendMission {
+  const byName = (name: string) => cadets.find((c) => c.fullName === name)?.id;
+  const completedNames = ['יאיר בן אליעזר', 'יחיאל שיינפלד', 'דניאל עידן', 'יצחק סבח', 'מוטי ברלב', 'יוסי אלבז', 'חיעד'];
+  const notCompletedNames = ['אשר סיני', 'יצחק ליקסנבורג', 'אלי גרוס', 'צבי מנדלסון', 'יצחק שגיא'];
+  const pollDate = '2026-06-29';
+
+  const completions = [
+    ...completedNames.map((name) => ({ cadetId: byName(name), completed: true, completionDate: pollDate })),
+    ...notCompletedNames.map((name) => ({ cadetId: byName(name), completed: false })),
+  ].filter((c): c is { cadetId: string; completed: boolean; completionDate?: string } => Boolean(c.cadetId));
+
+  return {
+    id: generateId('mission'),
+    weekNumber: 1,
+    title: 'סקר צוותי: אימונים קלים עצמאיים (צוות 3)',
+    description: 'סקר שהעביר איתי צפאני בקבוצת צוות 3 - מי ביצע אימונים קלים עצמאיים בסוף השבוע.',
+    completions,
+  };
+}
+
 function buildWeekendMissions(cadets: Cadet[], rng: () => number): WeekendMission[] {
   return Array.from({ length: TOTAL_WEEKS - 1 }, (_, i) => {
     const week = i + 1;
@@ -471,7 +504,7 @@ export function buildSeedData(): AppData {
   const attendance = buildAttendance(cadets, rng, DEFAULT_SETTINGS);
   const fitnessTests = buildFitnessTests(cadets, rng);
   const trainingPlans = buildTrainingPlans();
-  const weekendMissions = buildWeekendMissions(cadets, rng);
+  const weekendMissions = [...buildWeekendMissions(cadets, rng), buildTeam3PollMission(cadets)];
   const scores = buildScores(cadets, attendance, weekendMissions, fitnessTests, rng, DEFAULT_SETTINGS);
   const notes = buildNotes(cadets, rng);
 
