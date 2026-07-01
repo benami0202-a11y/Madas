@@ -225,6 +225,24 @@ function buildTeam2MadasAttendance(cadets: Cadet[], settings: Settings): Attenda
     });
 }
 
+/**
+ * Real attendance: on 29/06/2026 the whole company did a 5.5km tag march
+ * with vests and stretchers, and everyone attended.
+ */
+function buildTagMarchAttendance(cadets: Cadet[], settings: Settings): AttendanceRecord[] {
+  const date = '2026-06-29';
+  const sessionName = 'מסע תגיות - 5.5 ק"מ עם ווסטים ואלונקות';
+  const points = settings.scoringRules.attendancePresent;
+  return cadets.map((cadet) => ({
+    id: generateId('att'),
+    cadetId: cadet.id,
+    date,
+    sessionName,
+    status: 'present',
+    points,
+  }));
+}
+
 interface BaseStats {
   run3km: number;
   pushups: number;
@@ -302,7 +320,7 @@ const WEEK_PLAN_TEMPLATES: { objectives: string; trainingTypes: TrainingType[]; 
 ];
 
 function buildTrainingPlans(): TrainingPlanWeek[] {
-  return Array.from({ length: TOTAL_WEEKS }, (_, i) => {
+  const plans = Array.from({ length: TOTAL_WEEKS }, (_, i) => {
     const week = i + 1;
     const { start, end } = weekDates(week);
     const template = WEEK_PLAN_TEMPLATES[i % WEEK_PLAN_TEMPLATES.length];
@@ -316,6 +334,18 @@ function buildTrainingPlans(): TrainingPlanWeek[] {
       notes: template.notes,
     };
   });
+
+  // Real events reported by the fitness officer.
+  const week1 = plans.find((p) => p.weekNumber === 1);
+  if (week1) {
+    week1.notes += ' ב-29/6 בוצע מסע תגיות של 5.5 ק"מ עם ווסטים ואלונקות - השתתפות מלאה של כל הפלוגה.';
+  }
+  const week2 = plans.find((p) => p.weekNumber === 2);
+  if (week2) {
+    week2.notes += ' יום ראשון (5.7.2026): מבחן לסרגל מאמץ.';
+  }
+
+  return plans;
 }
 
 const MISSION_TEMPLATES = [
@@ -501,6 +531,7 @@ export function buildSeedData(): AppData {
   const attendance = [
     ...buildAttendance(cadets, rng, DEFAULT_SETTINGS),
     ...buildTeam2MadasAttendance(cadets, DEFAULT_SETTINGS),
+    ...buildTagMarchAttendance(cadets, DEFAULT_SETTINGS),
   ];
   const fitnessTests = buildFitnessTests(cadets, rng);
   const trainingPlans = buildTrainingPlans();
